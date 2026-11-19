@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NutriGuessr</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0f1512; --card:#18211c; --line:#2a3630; --text:#e9f1ec; --mute:#8fa39a;
+    --accent:#4ade80; --warn:#facc15; --bad:#f87171;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif;display:flex;justify-content:center;padding:24px 16px}
+  .wrap{width:100%;max-width:560px}
+  header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:20px}
+  h1{font-size:22px;font-weight:800;margin:0;letter-spacing:-.5px}
+  h1 span{color:var(--accent)}
+  .meta{color:var(--mute);font-size:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px}
+  .food{font-size:28px;font-weight:800;margin:4px 0 4px;line-height:1.15}
+  .sub{color:var(--mute);font-size:14px;margin-bottom:20px}
+  .field{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+  .field label{font-weight:500}
+  .field label small{color:var(--mute);font-weight:400}
+  .inp{display:flex;align-items:center;gap:8px}
+  input{width:110px;background:var(--bg);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:10px 12px;font:600 16px Inter,sans-serif;text-align:right}
+  input:focus{outline:none;border-color:var(--accent)}
+  .unit{color:var(--mute);width:30px;font-size:14px}
+  button{width:100%;margin-top:20px;background:var(--accent);color:#0b1a10;border:0;border-radius:12px;padding:14px;font:700 16px Inter,sans-serif;cursor:pointer}
+  button:hover{filter:brightness(1.08)}
+  .err{color:var(--bad);font-size:14px;margin-top:10px;min-height:18px}
+  table{width:100%;border-collapse:collapse;font-size:15px}
+  th{color:var(--mute);font-weight:500;text-align:right;padding:6px 4px;font-size:13px}
+  th:first-child,td:first-child{text-align:left}
+  td{padding:10px 4px;border-top:1px solid var(--line);text-align:right}
+  .pts{font-weight:700}
+  .bar{height:6px;background:var(--line);border-radius:3px;margin-top:6px;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--accent)}
+  .big{font-size:44px;font-weight:800;color:var(--accent);margin:8px 0}
+  .rounds{list-style:none;padding:0;margin:16px 0 0}
+  .rounds li{display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid var(--line)}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Nutri<span>Guessr</span></h1>
+    <div class="meta" id="meta"></div>
+  </header>
+
+  <!-- Saisie -->
+  <div class="card" id="guessView">
+    <div class="sub">Devine les valeurs pour 100 g</div>
+    <div class="food" id="foodName"></div>
+    <div class="sub" id="foodCat"></div>
+    <form id="form" autocomplete="off"></form>
+    <div class="err" id="err"></div>
+  </div>
+
+  <!-- Résultat de la manche -->
+  <div class="card hidden" id="resultView">
+    <div class="sub">Résultat</div>
+    <div class="food" id="resName"></div>
+    <div class="big" id="resPts"></div>
+    <table>
+      <thead><tr><th>Nutriment</th><th>Toi</th><th>Réel</th><th>Points</th></tr></thead>
+      <tbody id="resBody"></tbody>
+    </table>
+    <button id="nextBtn">Manche suivante</button>
+  </div>
+
+  <!-- Fin de partie -->
+  <div class="card hidden" id="endView">
+    <div class="sub">Partie terminée</div>
+    <div class="big" id="endTotal"></div>
+    <div class="sub" id="endMax"></div>
+    <ul class="rounds" id="endList"></ul>
+    <button id="againBtn">Rejouer</button>
+  </div>
+</div>
+
+<script>
+// Valeurs pour 100 g : [nom, catégorie, kcal, glucides, sucres, protéines, lipides]
+// Valeurs approximatives (prototype) — à remplacer par la table Ciqual.
+const FOODS = [
+  ["Pomme, crue","Fruit",52,11.6,9.4,0.3,0.3],
+  ["Banane, crue","Fruit",90,19.7,14.8,1.1,0.3],
+  ["Avocat, cru","Fruit",205,0.8,0.4,1.6,20.6],
+  ["Orange, crue","Fruit",45,8.6,8.3,0.9,0.1],
+  ["Fraise, crue","Fruit",33,6.0,5.0,0.7,0.3],
+  ["Raisin, cru","Fruit",69,16,16,0.6,0.2],
+  ["Kiwi, cru","Fruit",57,10.5,9,1.1,0.5],
+  ["Mangue, crue","Fruit",63,13.5,13,0.6,0.4],
+  ["Ananas, cru","Fruit",50,11,10,0.5,0.1],
+  ["Carotte, crue","Légume",36,6.6,5.8,0.8,0.3],
+  ["Tomate, crue","Légume",19,2.5,2.3,0.9,0.3],
+  ["Brocoli, cru","Légume",34,2.7,1.5,3.0,0.4],
+  ["Concombre, cru","Légume",13,2.0,1.7,0.6,0.1],
+  ["Courgette, crue","Légume",17,2.0,1.7,1.2,0.3],
+  ["Épinards, crus","Légume",23,1.0,0.4,2.9,0.4],
+  ["Champignon de Paris, cru","Légume",22,1.0,1.0,3.1,0.3],
+  ["Oignon, cru","Légume",39,7.6,4.2,1.1,0.1],
+  ["Ail, cru","Légume",140,28,1.0,6.4,0.5],
+  ["Haricots verts, cuits","Légume",29,3.6,2.2,1.8,0.2],
+  ["Maïs doux, en conserve","Légume",83,14,4,2.9,1.2],
+  ["Pomme de terre, crue","Féculent",80,16.7,0.7,2.0,0.1],
+  ["Riz blanc, cuit","Féculent",130,28.2,0.1,2.7,0.3],
+  ["Pâtes, cuites","Féculent",158,30.6,0.6,5.8,0.9],
+  ["Baguette","Féculent",273,56,2.3,9.5,1.2],
+  ["Flocons d'avoine","Féculent",372,58.7,1.0,13.5,7.0],
+  ["Farine de blé T55","Féculent",345,72,1.5,10,1.2],
+  ["Quinoa, cuit","Féculent",120,18.5,0.9,4.4,1.9],
+  ["Lentilles, cuites","Légumineuse",116,12.1,1.8,9.0,0.4],
+  ["Pois chiches, cuits","Légumineuse",164,19.8,4.8,8.9,2.6],
+  ["Tofu nature","Légumineuse",125,1.5,0.6,13,7.5],
+  ["Blanc de poulet, cru","Viande",120,0,0,22.5,2.6],
+  ["Steak haché 5 % MG, cru","Viande",129,0,0,21,5],
+  ["Jambon blanc","Viande",115,1,1,20,3.5],
+  ["Lardons fumés","Viande",273,0.5,0.5,16,23],
+  ["Saucisson sec","Viande",409,2,1,26,33],
+  ["Saumon, cru","Poisson",208,0,0,20.4,13.4],
+  ["Thon au naturel, en conserve","Poisson",110,0,0,25,1],
+  ["Œuf entier, cru","Œuf",143,0.7,0.4,12.6,9.5],
+  ["Lait demi-écrémé","Produit laitier",46,4.8,4.8,3.3,1.6],
+  ["Yaourt nature","Produit laitier",61,4.7,4.7,3.5,3.3],
+  ["Fromage blanc 0 %","Produit laitier",49,3.9,3.9,7.5,0.2],
+  ["Emmental","Fromage",379,0,0,28.5,29.5],
+  ["Camembert","Fromage",276,0.5,0.5,20,21.5],
+  ["Mozzarella","Fromage",251,1,1,18,19.5],
+  ["Parmesan","Fromage",395,0,0,33,29],
+  ["Beurre doux","Matière grasse",743,0.6,0.6,0.7,82],
+  ["Huile d'olive","Matière grasse",900,0,0,0,100],
+  ["Crème fraîche épaisse 30 %","Matière grasse",292,2.6,2.6,2.4,30],
+  ["Mayonnaise","Sauce",685,1.5,1,1.5,75],
+  ["Ketchup","Sauce",102,24,23,1.2,0.1],
+  ["Sucre blanc","Sucré",400,100,100,0,0],
+  ["Miel","Sucré",327,81,81,0.4,0],
+  ["Pâte à tartiner type Nutella","Sucré",539,57.5,56.3,6.3,30.9],
+  ["Chocolat noir 70 %","Sucré",570,33,28,8,42],
+  ["Croissant","Viennoiserie",406,45,9,8,21],
+  ["Amandes","Oléagineux",610,6,4.5,21,53],
+  ["Noix","Oléagineux",690,7,2.6,15,65],
+  ["Cacahuètes grillées","Oléagineux",600,13,4,25,49],
+  ["Chips","Snack",538,50,0.5,6,34],
+  ["Frites (fast-food)","Snack",296,35,0.3,3.4,15],
+  ["Pizza margherita","Plat",250,30,3,10,9.5],
+  ["Coca-Cola","Boisson",42,10.6,10.6,0,0],
+  ["Jus d'orange","Boisson",45,10,8.4,0.7,0.2],
+];
+
+const NUTRIENTS = [
+  {key:"kcal", label:"Énergie", unit:"kcal", idx:2, floor:30},
+  {key:"glu",  label:"Glucides", unit:"g", idx:3, floor:2},
+  {key:"suc",  label:"dont sucres", unit:"g", idx:4, floor:2, small:true},
+  {key:"pro",  label:"Protéines", unit:"g", idx:5, floor:2},
+  {key:"lip",  label:"Lipides", unit:"g", idx:6, floor:2},
+];
+const ROUNDS = 5, MAX_PER = 200; // 5 nutriments × 200 = 1000 pts par produit
+
+// Score d'un nutriment : 200 · exp(-1,5 · écart relatif)
+// écart relatif = |réponse − réel| / max(réel, plancher)  (le plancher évite la division par ~0)
+function score(guess, real, floor){
+  const r = Math.abs(guess - real) / Math.max(real, floor);
+  return Math.round(MAX_PER * Math.exp(-1.5 * r));
+}
+
+let order = [], round = 0, history = [];
+const $ = id => document.getElementById(id);
+const fmt = v => (Math.round(v*10)/10).toString().replace(".", ",");
+
+function buildForm(){
+  $("form").innerHTML = NUTRIENTS.map(n => `
+    <div class="field">
+      <label for="${n.key}">${n.small ? "&nbsp;&nbsp;↳ " : ""}${n.label}</label>
+      <div class="inp"><input id="${n.key}" type="text" inputmode="decimal" placeholder="?"><span class="unit">${n.unit}</span></div>
+    </div>`).join("") + `<button type="submit">Valider</button>`;
+}
+
+function newGame(){
+  order = [...FOODS.keys()].sort(() => Math.random() - .5).slice(0, ROUNDS);
+  round = 0; history = [];
+  showRound();
+}
+
+function show(view){
+  ["guessView","resultView","endView"].forEach(v => $(v).classList.toggle("hidden", v !== view));
+}
+
+function showRound(){
+  const f = FOODS[order[round]];
+  $("foodName").textContent = f[0];
+  $("foodCat").textContent = f[1];
+  $("meta").textContent = `Manche ${round+1}/${ROUNDS} · ${history.reduce((a,h)=>a+h.total,0)} pts`;
+  NUTRIENTS.forEach(n => $(n.key).value = "");
+  $("err").textContent = "";
+  show("guessView");
+  $("kcal").focus();
+}
+
+$("form").addEventListener("submit", e => {
+  e.preventDefault();
+  const guesses = {};
+  for (const n of NUTRIENTS){
+    const raw = $(n.key).value.trim().replace(",", ".");
+    const v = parseFloat(raw);
+    if (raw === "" || isNaN(v) || v < 0){ $("err").textContent = `Valeur manquante ou invalide : ${n.label}`; $(n.key).focus(); return; }
+    guesses[n.key] = v;
+  }
+  if (guesses.suc > guesses.glu){ $("err").textContent = "Les sucres ne peuvent pas dépasser les glucides."; $("suc").focus(); return; }
+
+  const f = FOODS[order[round]];
+  let total = 0;
+  const rows = NUTRIENTS.map(n => {
+    const real = f[n.idx], p = score(guesses[n.key], real, n.floor);
+    total += p;
+    return `<tr><td>${n.label}</td><td>${fmt(guesses[n.key])}</td><td><b>${fmt(real)}</b> ${n.unit}</td>
+      <td class="pts">${p}<div class="bar"><i style="width:${p/MAX_PER*100}%"></i></div></td></tr>`;
+  }).join("");
+  history.push({name:f[0], total});
+  $("resName").textContent = f[0];
+  $("resPts").textContent = `${total} / ${MAX_PER*NUTRIENTS.length}`;
+  $("resBody").innerHTML = rows;
+  $("nextBtn").textContent = round === ROUNDS-1 ? "Voir le score final" : "Manche suivante";
+  $("meta").textContent = `Manche ${round+1}/${ROUNDS} · ${history.reduce((a,h)=>a+h.total,0)} pts`;
+  show("resultView");
+  $("nextBtn").focus();
+});
+
+$("nextBtn").addEventListener("click", () => {
+  round++;
+  if (round < ROUNDS) return showRound();
+  const sum = history.reduce((a,h)=>a+h.total,0);
+  const max = ROUNDS*MAX_PER*NUTRIENTS.length;
+  $("endTotal").textContent = `${fmt(sum/max*20)} / 20`;
+  $("endMax").textContent = `${sum} / ${max} pts`;
+  $("endList").innerHTML = history.map(h => `<li><span>${h.name}</span><b>${h.total} / 1000</b></li>`).join("");
+  $("meta").textContent = "";
+  show("endView");
+});
+$("againBtn").addEventListener("click", newGame);
+
+buildForm();
+newGame();
+</script>
+</body>
+</html>
